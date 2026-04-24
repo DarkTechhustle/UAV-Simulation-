@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="UAV Smart Agriculture Dashboard — Real-time crop disease detection powered by PyTorch AI and drone imaging." />
+    <title>UAV Smart Agriculture Dashboard</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="dashboard-container">
+      <!-- Sidebar Navigation -->
+      <aside class="sidebar glassmorphism">
+        <h1 class="logo-text">UAV <span class="accent">Agri</span></h1>
+        <nav class="nav-menu">
+          <a href="#" class="nav-item active" data-target="dashboard-view">
+            <span class="icon">🛸</span> Dashboard
+          </a>
+          <a href="#" class="nav-item" data-target="analysis-view">
+            <span class="icon">🌿</span> Crop Analysis
+          </a>
+          <a href="#" class="nav-item" data-target="telemetry-view">
+            <span class="icon">📊</span> Telemetry
+          </a>
+          <a href="#" class="nav-item" data-target="settings-view">
+            <span class="icon">⚙️</span> Settings
+          </a>
+        </nav>
+        <div class="drone-preview">
+          <h3>Vanguard X-1</h3>
+          <img
+            src="/static/drone_image.png"
+            alt="3D Drone Asset"
+            id="static-drone-image"
+          />
+          <div class="status-badge pulse-healthy">Online</div>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <header class="top-header">
+          <h2 id="view-title">Live Flight Simulation</h2>
+          <div class="user-profile">
+            <span class="user-greeting" id="user-greeting">Welcome, Guest</span>
+            <div class="avatar" id="user-avatar"></div>
+          </div>
+        </header>
+
+        <div class="view-content-area" style="position: relative; flex-grow: 1;">
+          
+          <!-- View: Dashboard (Simulation) -->
+          <div id="dashboard-view" class="view-section active grid-content">
+            <div class="simulation-card glassmorphism span-2">
+              <div class="card-header">
+                <h3>Flight Control</h3>
+                <span class="controls-hint">Use <b>W, A, S, D, Q, E</b> to fly the drone</span>
+              </div>
+              <div id="canvas-container" class="canvas-wrapper">
+                <!-- Three.js renders here -->
+              </div>
+              <div id="simulation-overlay">
+                <div class="hud-item hud-alt">ALT: <span id="hud-alt-val">0.0</span>m</div>
+                <div class="hud-item hud-spd">SPD: <span id="hud-spd-val">0.0</span>m/s</div>
+                <div class="hud-item hud-bat">BAT: <span id="hud-bat-val">98</span>%</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- View: Crop Analysis (Real-Time Module) -->
+          <div id="analysis-view" class="view-section hidden">
+            <!-- Top Row: Camera (left) + Results/Metrics (right) -->
+            <div class="analysis-top-row">
+              <!-- LEFT: Live Camera Feed -->
+              <div class="camera-feed-card glassmorphism">
+                <div class="card-header">
+                  <h3>🔬 Live Drone Camera</h3>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <span class="model-tag">🧠 PyTorch CNN</span>
+                    <span class="scan-interval-display" id="scan-interval-label">2.0s interval</span>
+                  </div>
+                </div>
+                <div class="camera-container" id="camera-container">
+                  <div class="camera-placeholder" id="camera-placeholder">
+                    <span class="placeholder-icon">📷</span>
+                    <span class="placeholder-label">Click "Start Scanning" to activate drone camera</span>
+                  </div>
+                  <video id="camera-feed" autoplay playsinline muted style="display:none;"></video>
+                  <div class="scan-overlay" id="scan-overlay">
+                    <div class="scan-line"></div>
+                    <div class="scan-corner-tr"></div>
+                    <div class="scan-corner-bl"></div>
+                  </div>
+                  <div class="camera-status-bar">
+                    <div class="live-badge" id="live-badge">
+                      <span class="live-dot"></span> OFFLINE
+                    </div>
+                    <span class="frame-counter" id="frame-counter">Frame: 0</span>
+                  </div>
+                </div>
+                <div class="camera-controls">
+                  <button class="btn-scan-toggle btn-scan-start" id="scan-toggle-btn">
+                    ▶ Start Scanning
+                  </button>
+                  <button class="btn-upload-fallback" id="upload-fallback-btn" title="Upload image manually">
+                    📁 Upload
+                  </button>
+                  <input type="file" id="crop-image-upload" accept="image/*" class="hidden-file-input" />
+                </div>
+              </div>
+
+              <!-- RIGHT Column: Detection + Metrics stacked -->
+              <div class="analysis-right-col">
+                <!-- Real-Time Scan Results -->
+                <div class="rt-results-card glassmorphism">
+                  <div class="card-header">
+                    <h3>⚡ Live Detection</h3>
+                    <span class="controls-hint" id="detection-status">Awaiting scan...</span>
+                  </div>
+                  <div class="rt-result-body" id="rt-result-body">
+                    <div class="placeholder-text" id="rt-placeholder">
+                      Start the scanner to see real-time AI crop disease detection results here.
+                    </div>
+                    <div id="rt-detection-container" style="display:none;">
+                      <div class="rt-detection healthy" id="rt-detection">
+                        <div class="rt-status-icon healthy" id="rt-status-icon">✅</div>
+                        <div class="rt-detection-info">
+                          <div class="rt-disease-name healthy" id="rt-disease-name">Healthy</div>
+                          <div class="rt-status-label" id="rt-status-label">Status: Healthy</div>
+                        </div>
+                      </div>
+                      <div class="rt-confidence-section">
+                        <div class="rt-confidence-header">
+                          <span class="rt-confidence-label">Confidence</span>
+                          <span class="rt-confidence-value" id="rt-confidence-value">0%</span>
+                        </div>
+                        <div class="rt-confidence-bar">
+                          <div class="rt-confidence-fill" id="rt-confidence-fill" style="width: 0%"></div>
+                        </div>
+                      </div>
+                      <div class="rt-recommendation" id="rt-recommendation">
+                        <strong>💡 Recommendation</strong>
+                        <span id="rt-recommendation-text">—</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Live Metrics -->
+                <div class="rt-metrics-card glassmorphism">
+                  <div class="card-header">
+                    <h3>📈 Session Metrics</h3>
+                  </div>
+                  <div class="metrics-grid">
+                    <div class="metric-item">
+                      <span class="metric-icon">🔍</span>
+                      <span class="metric-value blue" id="metric-scans">0</span>
+                      <span class="metric-label">Scans</span>
+                    </div>
+                    <div class="metric-item">
+                      <span class="metric-icon">⚠️</span>
+                      <span class="metric-value warn" id="metric-anomalies">0</span>
+                      <span class="metric-label">Anomalies</span>
+                    </div>
+                    <div class="metric-item">
+                      <span class="metric-icon">🎯</span>
+                      <span class="metric-value accent" id="metric-avg-conf">—</span>
+                      <span class="metric-label">Avg Confidence</span>
+                    </div>
+                    <div class="metric-item">
+                      <span class="metric-icon">🌱</span>
+                      <div class="health-ring-container">
+                        <svg class="health-ring-svg" width="64" height="64" viewBox="0 0 64 64">
+                          <circle class="health-ring-bg" cx="32" cy="32" r="28" />
+                          <circle class="health-ring-fill" id="health-ring-fill" cx="32" cy="32" r="28"
+                            stroke-dasharray="175.93"
+                            stroke-dashoffset="175.93" />
+                        </svg>
+                        <span class="health-ring-value" id="health-ring-value">—</span>
+                      </div>
+                      <span class="metric-label">Health Score</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Row: Scan History -->
+            <div class="rt-history-card glassmorphism">
+              <div class="card-header">
+                <h3>🕒 Scan History</h3>
+                <span class="controls-hint" id="history-count">0 scans</span>
+              </div>
+              <div class="history-list" id="history-list">
+                <div class="history-empty" id="history-empty">No scans recorded yet. Start scanning to build a history timeline.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- View: Telemetry -->
+          <div id="telemetry-view" class="view-section hidden grid-content">
+            <div class="graph-card glassmorphism span-3">
+              <div class="card-header">
+                <h3>Live Signal & Range Telemetry</h3>
+                <span class="controls-hint" id="telemetry-status">Connecting...</span>
+              </div>
+              <div class="fake-graph" id="telemetry-graph-container">
+                <!-- Updated programmatically -->
+                <div class="graph-bar" style="height: 60%"></div>
+                <div class="graph-bar" style="height: 80%"></div>
+                <div class="graph-bar" style="height: 40%"></div>
+                <div class="graph-bar" style="height: 90%"></div>
+                <div class="graph-bar" style="height: 50%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- View: Settings -->
+          <div id="settings-view" class="view-section hidden grid-content">
+            <div class="analysis-card glassmorphism span-2">
+              <div class="card-header">
+                <h3>System Preferences</h3>
+              </div>
+              <div style="padding: 20px;">
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">Configure your dashboard experience.</p>
+                <div style="margin-bottom: 15px;">
+                  <label style="display:block; margin-bottom:5px; font-weight:bold;">Telemetry Polling Rate (ms)</label>
+                  <input type="number" id="polling-rate" class="glass-input" value="2000" style="padding: 8px; border-radius: 4px; background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--border-glass);">
+                </div>
+                <div>
+                  <button class="btn-glow" onclick="alert('Settings Saved!')">Save Settings</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+
+
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
