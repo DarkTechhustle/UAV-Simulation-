@@ -1,6 +1,68 @@
 // Three.js Drone Simulation and API Connectors
 const initDashboard = () => {
+
     // -------------------------------------------------------------------
+    // 0. AUTH SESSION CHECK — Redirect to login if not authenticated
+    // -------------------------------------------------------------------
+    const authToken = localStorage.getItem('uav_token');
+    const userData = localStorage.getItem('uav_user');
+
+    if (!authToken) {
+        window.location.href = '/static/login.html';
+        return;
+    }
+
+    // Verify token with backend
+    fetch('/api/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + authToken }
+    }).then(res => {
+        if (!res.ok) {
+            localStorage.removeItem('uav_token');
+            localStorage.removeItem('uav_user');
+            window.location.href = '/static/login.html';
+        }
+    }).catch(() => {});
+
+    // Populate user greeting
+    if (userData) {
+        try {
+            const user = JSON.parse(userData);
+            const greeting = document.getElementById('user-greeting');
+            if (greeting) {
+                greeting.textContent = `Welcome, ${user.fullname || user.username}`;
+            }
+            // Set avatar initials
+            const avatar = document.getElementById('user-avatar');
+            if (avatar && user.fullname) {
+                const initials = user.fullname.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                avatar.textContent = initials;
+                avatar.style.display = 'flex';
+                avatar.style.alignItems = 'center';
+                avatar.style.justifyContent = 'center';
+                avatar.style.fontFamily = 'var(--font-heading)';
+                avatar.style.fontWeight = '700';
+                avatar.style.fontSize = '14px';
+                avatar.style.color = '#0f111a';
+            }
+        } catch (e) {}
+    }
+
+    // Logout button handler
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+            } catch (e) {}
+            localStorage.removeItem('uav_token');
+            localStorage.removeItem('uav_user');
+            window.location.href = '/static/login.html';
+        });
+    }
+
     // 1. Scene Setup & Camera
     // -------------------------------------------------------------------
     const container = document.getElementById('canvas-container');
@@ -586,8 +648,70 @@ const initDashboard = () => {
             if (targetId === "analysis-view") viewTitle.innerText = "Crop Analysis Module";
             if (targetId === "telemetry-view") viewTitle.innerText = "Live Drone Telemetry";
             if (targetId === "settings-view") viewTitle.innerText = "System Preferences";
+            if (targetId === "contact-view") viewTitle.innerText = "Contact Us";
         });
     });
+
+    // -------------------------------------------------------------------
+    // 9. Contact Form Handler
+    // -------------------------------------------------------------------
+    const contactForm = document.getElementById('contact-form');
+    if (contactForm) {
+        contactForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const successEl = document.getElementById('contact-success');
+            const errorEl = document.getElementById('contact-error');
+            const btn = document.getElementById('contact-submit-btn');
+            const btnText = btn.querySelector('.btn-text');
+            const btnSpinner = btn.querySelector('.btn-spinner');
+            
+            successEl.style.display = 'none';
+            errorEl.style.display = 'none';
+            
+            const name = document.getElementById('contact-name').value.trim();
+            const email = document.getElementById('contact-email').value.trim();
+            const subject = document.getElementById('contact-subject').value.trim();
+            const message = document.getElementById('contact-message').value.trim();
+            
+            if (!name || !email || !subject || !message) {
+                errorEl.textContent = '⚠️ Please fill in all fields.';
+                errorEl.style.display = 'block';
+                return;
+            }
+            
+            btnText.style.display = 'none';
+            btnSpinner.style.display = 'inline-block';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch('/api/contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, subject, message })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok) {
+                    successEl.textContent = '✅ ' + (data.message || 'Message sent successfully!');
+                    successEl.style.display = 'block';
+                    contactForm.reset();
+                    setTimeout(() => { successEl.style.display = 'none'; }, 5000);
+                } else {
+                    errorEl.textContent = '❌ ' + (data.detail || 'Failed to send message.');
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.textContent = '❌ Network error. Please try again.';
+                errorEl.style.display = 'block';
+            }
+            
+            btnText.style.display = 'inline';
+            btnSpinner.style.display = 'none';
+            btn.disabled = false;
+        });
+    }
 
 };
 

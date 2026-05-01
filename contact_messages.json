@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "description": "UAV Dashboard — Contact Messages",
+    "total_messages": 2
+  },
+  "messages": [
+    {
+      "id": "0a115232",
+      "name": "hi",
+      "email": "a@gmail.com",
+      "subject": "this is to conclude",
+      "message": "thank you",
+      "submitted_at": "2026-05-01T23:24:31.059845",
+      "read": false
+    },
+    {
+      "id": "6cb5feb2",
+      "name": "hi",
+      "email": "a@gmail.com",
+      "subject": "this is to conclude",
+      "message": "gdyfhf",
+      "submitted_at": "2026-05-01T23:31:49.203033",
+      "read": false
+    }
+  ]
+}

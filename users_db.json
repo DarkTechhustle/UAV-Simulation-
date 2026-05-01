@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "description": "UAV Smart Agriculture — User Database",
+    "created_at": "2026-05-01T22:11:03.457587",
+    "last_modified": "2026-05-01T23:31:39.897130",
+    "total_users": 5
+  },
+  "users": {
+    "admin": {
+      "username": "admin",
+      "fullname": "System Administrator",
+      "email": "admin@uav-agri.local",
+      "password_hash": "dc153c8a7ed4dc9ce1ca9f8561ac354987d0d4602394e7ff91e39fae3f3f91bc",
+      "role": "admin",
+      "created_at": "2026-05-01T22:11:03.457619",
+      "last_login": null,
+      "login_count": 0,
+      "is_active": true
+    },
+    "ashley": {
+      "username": "ashley",
+      "fullname": "Ashley Kumar",
+      "email": "ashley@test.com",
+      "password_hash": "305dbec364ad38b00385fd3db7e8fb6376a706f18d9605a2571f5cb882ec6177",
+      "role": "operator",
+      "created_at": "2026-05-01T22:11:03.457915",
+      "last_login": "2026-05-01T22:40:30.523587",
+      "login_count": 3,
+      "is_active": true
+    },
+    "ashleygreyone": {
+      "username": "ashleygreyone",
+      "fullname": "aswin",
+      "email": "aswinbaalaji09@gmail.com",
+      "password_hash": "069553d45a154b5c304e6048a342c7c8dc9e238558535ebc419ad6df795f6f89",
+      "role": "agronomist",
+      "created_at": "2026-05-01T22:41:36.641687",
+      "last_login": "2026-05-01T23:31:39.897122",
+      "login_count": 5,
+      "is_active": true
+    },
+    "shobs": {
+      "username": "shobs",
+      "fullname": "Shobika",
+      "email": "shobika659@gmail.com",
+      "password_hash": "bdffde56bb30ba126342b4bf61499911a7de2aec249cefd8fb6d84c4e6a8a7ae",
+      "role": "researcher",
+      "created_at": "2026-05-01T23:02:22.695631",
+      "last_login": "2026-05-01T23:07:51.109989",
+      "login_count": 1,
+      "is_active": true
+    },
+    "sobi": {
+      "username": "sobi",
+      "fullname": "sobidog",
+      "email": "sobithajothiraman@gmail.com",
+      "password_hash": "bdffde56bb30ba126342b4bf61499911a7de2aec249cefd8fb6d84c4e6a8a7ae",
+      "role": "agronomist",
+      "created_at": "2026-05-01T23:09:31.981622",
+      "last_login": "2026-05-01T23:10:11.678088",
+      "login_count": 1,
+      "is_active": true
+    }
+  }
+}
