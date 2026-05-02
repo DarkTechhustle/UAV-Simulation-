@@ -682,6 +682,400 @@ async def get_contact_messages():
     return db
 
 
+# ====================================================================
+# ALARM CALL — Emergency phone call logging & notification
+# ====================================================================
+ALARM_LOG_FILE = os.path.join(os.path.dirname(__file__), "alarm_calls.json")
+
+class AlarmCallRequest(BaseModel):
+    phone_number: str
+    caller: str = "Unknown"
+    type: str = "emergency_alarm"
+
+def load_alarm_log():
+    if not os.path.exists(ALARM_LOG_FILE):
+        return {"_meta": {"description": "UAV Dashboard — Alarm Call Log", "total_calls": 0}, "calls": []}
+    with open(ALARM_LOG_FILE, "r") as f:
+        return json.load(f)
+
+def save_alarm_log(db):
+    db["_meta"]["total_calls"] = len(db["calls"])
+    with open(ALARM_LOG_FILE, "w") as f:
+        json.dump(db, f, indent=2, ensure_ascii=False)
+
+@app.post("/api/alarm-call")
+async def initiate_alarm_call(data: AlarmCallRequest):
+    """Log an emergency alarm call and send notification email."""
+    if not data.phone_number.strip():
+        raise HTTPException(status_code=400, detail="Phone number is required.")
+    
+    # Log the call
+    db = load_alarm_log()
+    entry = {
+        "id": str(uuid.uuid4())[:8],
+        "phone_number": data.phone_number.strip(),
+        "caller": data.caller,
+        "type": data.type,
+        "initiated_at": datetime.now().isoformat(),
+        "status": "initiated"
+    }
+    db["calls"].append(entry)
+    save_alarm_log(db)
+    
+    print(f"\n🚨 ALARM CALL INITIATED")
+    print(f"   📞 Number: {data.phone_number}")
+    print(f"   👤 Caller: {data.caller}")
+    print(f"   ⏱️  Time: {entry['initiated_at']}")
+    print(f"   🆔 ID: {entry['id']}\n")
+    
+    # Send email notification about the alarm call
+    try:
+        send_alarm_notification_email(entry)
+    except Exception as e:
+        print(f"  ⚠️ Alarm email notification failed: {e}")
+    
+    return {
+        "message": "Alarm call initiated successfully.",
+        "call_id": entry["id"],
+        "phone_number": data.phone_number,
+        "status": "initiated"
+    }
+
+def send_alarm_notification_email(entry: dict):
+    """Send email notification about an emergency alarm call."""
+    if not SMTP_CONFIG["email"] or not SMTP_CONFIG["password"]:
+        return
+    
+    html_body = f"""
+    <html>
+    <body style="margin:0; padding:0; background-color:#0f111a; font-family:'Segoe UI',Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f111a; padding:40px 0;">
+            <tr><td align="center">
+                <table width="480" cellpadding="0" cellspacing="0" style="background:#1a1d2c; border:1px solid rgba(255,61,0,0.2); border-radius:16px; overflow:hidden;">
+                    <tr><td style="padding:28px 36px 16px; border-bottom:1px solid rgba(255,61,0,0.15); background:rgba(255,61,0,0.05);">
+                        <h1 style="margin:0; color:#ff6e40; font-size:20px;">🚨 Emergency Alarm Call</h1>
+                        <p style="margin:6px 0 0; color:#8a90b8; font-size:12px;">UAV Agri Dashboard • {entry['initiated_at'][:19]}</p>
+                    </td></tr>
+                    <tr><td style="padding:28px 36px;">
+                        <table width="100%" style="margin-bottom:16px;">
+                            <tr>
+                                <td style="color:#8a90b8; font-size:12px; text-transform:uppercase; padding:8px 0; width:90px;">Phone</td>
+                                <td style="color:#ff6e40; font-size:18px; font-weight:700; font-family:monospace; padding:8px 0; letter-spacing:1px;">{entry['phone_number']}</td>
+                            </tr>
+                            <tr>
+                                <td style="color:#8a90b8; font-size:12px; text-transform:uppercase; padding:8px 0;">Caller</td>
+                                <td style="color:#f0f2f5; font-size:14px; font-weight:600; padding:8px 0;">{entry['caller']}</td>
+                            </tr>
+                            <tr>
+                                <td style="color:#8a90b8; font-size:12px; text-transform:uppercase; padding:8px 0;">Type</td>
+                                <td style="color:#f0f2f5; font-size:14px; padding:8px 0;">{entry['type']}</td>
+                            </tr>
+                            <tr>
+                                <td style="color:#8a90b8; font-size:12px; text-transform:uppercase; padding:8px 0;">Status</td>
+                                <td style="padding:8px 0;">
+                                    <span style="display:inline-block; background:rgba(255,61,0,0.12); color:#ff6e40; padding:4px 12px; border-radius:6px; font-size:12px; font-weight:600;">INITIATED</span>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="margin:20px 0 0; text-align:center;">
+                            <a href="tel:{entry['phone_number']}" style="display:inline-block; background:linear-gradient(135deg,#ff3d00,#ff6e40); color:white; text-decoration:none; padding:12px 32px; border-radius:8px; font-size:14px; font-weight:700;">📞 Call Back</a>
+                        </p>
+                    </td></tr>
+                    <tr><td style="padding:16px 36px; border-top:1px solid rgba(255,255,255,0.06); text-align:center;">
+                        <p style="color:#5a5f80; font-size:11px; margin:0;">Call ID: {entry['id']}</p>
+                    </td></tr>
+                </table>
+            </td></tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🚨 ALARM CALL: {entry['phone_number']} — {entry['caller']}"
+    msg["From"] = f"{SMTP_CONFIG['sender_name']} <{SMTP_CONFIG['email']}>"
+    msg["To"] = SMTP_CONFIG["email"]
+    
+    text_body = f"Emergency alarm call initiated!\nPhone: {entry['phone_number']}\nCaller: {entry['caller']}\nTime: {entry['initiated_at']}"
+    msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+    
+    with smtplib.SMTP(SMTP_CONFIG["host"], SMTP_CONFIG["port"]) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(SMTP_CONFIG["email"], SMTP_CONFIG["password"])
+        server.send_message(msg)
+    
+    print(f"  ✅ Alarm notification email sent\n")
+
+
+@app.get("/api/alarm-calls")
+async def get_alarm_calls():
+    """Return all alarm call logs (for admin viewing)."""
+    db = load_alarm_log()
+    return db
+
+
+# ====================================================================
+# AI CHAT ASSISTANT — Gemini-Powered (ChatGPT-like)
+# ====================================================================
+import requests as http_requests
+
+# ⚠️ SET YOUR GEMINI API KEY HERE
+# Get a FREE key at: https://aistudio.google.com/apikey
+# Once set, AgriBot will answer ANY question like ChatGPT!
+GEMINI_API_KEY = ""  # Paste your key here
+
+class AIChatRequest(BaseModel):
+    message: str
+    username: str = "Operator"
+    chat_history: list = []
+
+# Knowledge base for crop disease management
+DISEASE_KNOWLEDGE = {
+    "Early Blight": {
+        "cause": "Caused by the fungus Alternaria solani",
+        "symptoms": "Dark brown to black concentric rings on lower leaves, creating a target-like pattern. Leaves yellow and drop prematurely.",
+        "severity": "Moderate",
+        "treatment": [
+            "Apply chlorothalonil or copper-based fungicide immediately",
+            "Remove and destroy affected lower leaves",
+            "Increase plant spacing for better air circulation",
+            "Avoid overhead irrigation to reduce leaf wetness",
+            "Apply mulch to prevent soil splash onto leaves"
+        ],
+        "prevention": [
+            "Use certified disease-free seeds",
+            "Practice 2-3 year crop rotation",
+            "Ensure adequate plant nutrition (calcium, potassium)",
+            "Remove crop debris after harvest"
+        ],
+        "urgency": "🟡 Moderate — treat within 48 hours"
+    },
+    "Late Blight": {
+        "cause": "Caused by the oomycete Phytophthora infestans",
+        "symptoms": "Water-soaked lesions on leaves that quickly turn brown/black. White fuzzy growth on leaf undersides. Can destroy entire crops rapidly.",
+        "severity": "Critical",
+        "treatment": [
+            "Apply systemic fungicide (metalaxyl/mancozeb) IMMEDIATELY",
+            "Remove and burn all infected plant material",
+            "Isolate affected zone — do NOT compost infected debris",
+            "Apply copper-based spray as protective measure",
+            "Consider emergency harvest of healthy crops nearby"
+        ],
+        "prevention": [
+            "Use resistant crop varieties",
+            "Eliminate volunteer plants and cull piles",
+            "Monitor weather — high humidity + cool temps = high risk",
+            "Apply preventive fungicide during rainy periods"
+        ],
+        "urgency": "🔴 Critical — treat IMMEDIATELY within 24 hours"
+    },
+    "Leaf Rust": {
+        "cause": "Caused by Puccinia spp. fungi",
+        "symptoms": "Small, orange-brown pustules on leaf surfaces. Severely infected leaves turn yellow and drop. Reduces photosynthesis significantly.",
+        "severity": "Moderate to High",
+        "treatment": [
+            "Apply propiconazole or tebuconazole fungicide",
+            "Remove heavily infected leaves",
+            "Increase plant spacing for ventilation",
+            "Apply potassium-rich fertilizer to boost plant immunity",
+            "Monitor adjacent plots for spread"
+        ],
+        "prevention": [
+            "Plant rust-resistant varieties",
+            "Avoid excessive nitrogen fertilization",
+            "Ensure good drainage and air flow",
+            "Scout fields weekly during growing season"
+        ],
+        "urgency": "🟡 Moderate — treat within 3 days"
+    },
+    "Powdery Mildew": {
+        "cause": "Caused by various species of Erysiphales fungi",
+        "symptoms": "White powdery coating on leaf surfaces, stems, and sometimes fruit. Leaves curl, yellow, and die. Stunts plant growth.",
+        "severity": "Moderate",
+        "treatment": [
+            "Apply sulfur-based or neem oil fungicide",
+            "Use potassium bicarbonate spray as organic option",
+            "Prune dense canopy to improve air circulation",
+            "Reduce humidity around foliage",
+            "Apply milk spray (40% milk solution) as natural remedy"
+        ],
+        "prevention": [
+            "Select resistant varieties",
+            "Avoid overcrowding plants",
+            "Water at soil level, not from above",
+            "Ensure adequate sunlight exposure"
+        ],
+        "urgency": "🟢 Low-Moderate — treat within 5 days"
+    },
+    "Healthy": {
+        "cause": "No disease detected",
+        "symptoms": "Vibrant green foliage, strong stems, normal growth patterns",
+        "severity": "None",
+        "treatment": [
+            "Continue current management practices",
+            "Maintain regular watering schedule",
+            "Monitor for any emerging symptoms"
+        ],
+        "prevention": [
+            "Continue crop rotation practices",
+            "Maintain soil health with organic matter",
+            "Regular scouting and monitoring"
+        ],
+        "urgency": "🟢 All clear — crops are healthy"
+    }
+}
+
+def build_system_prompt(username: str) -> str:
+    """Build a dynamic system prompt with live scan data context."""
+    total_scans = len(scan_history)
+    anomalies = sum(1 for s in scan_history if s.get("status") == "Needs Attention")
+    disease_counts = {}
+    for s in scan_history:
+        d = s.get("detected_disease", "Unknown")
+        disease_counts[d] = disease_counts.get(d, 0) + 1
+    avg_health = round(sum(s.get("health_score", 0) for s in scan_history) / max(total_scans, 1), 1)
+    latest = scan_history[-1] if scan_history else None
+
+    scan_context = "No scans performed yet."
+    if total_scans > 0:
+        scan_context = f"""Total scans: {total_scans}, Anomalies: {anomalies}, Avg health: {avg_health}%
+Disease breakdown: {json.dumps(disease_counts)}
+Latest scan: {json.dumps(latest)}"""
+
+    return f"""You are AgriBot, an expert AI assistant for the UAV Smart Agriculture Dashboard.
+User's name: {username}. Always address them by name and be warm and conversational.
+
+LIVE SCAN DATA:
+{scan_context}
+
+You are an expert in:
+- Crop disease detection and treatment (Early Blight, Late Blight, Leaf Rust, Powdery Mildew)
+- Agriculture, farming, irrigation, soil science, fertilizers
+- UAV/drone operations for precision agriculture
+- Plant pathology, pest management, crop rotation
+- Weather impact on crops, seasonal farming advice
+- General science, technology, and any topic the user asks about
+
+RULES:
+1. Answer ANY question thoroughly and in detail — you are a general-purpose AI like ChatGPT
+2. When discussing crop data, use the LIVE SCAN DATA above for accurate, personalized answers
+3. Use markdown: **bold**, bullet points (•), and emojis for readability
+4. Provide actionable decisions and step-by-step recommendations
+5. For diseases: include cause, symptoms, severity, treatment, prevention
+6. Be helpful for ANY topic — coding, math, science, history, etc.
+7. Keep responses detailed but well-structured. Use line breaks (\\n) for formatting.
+8. If asked about yourself: you're AgriBot, powered by AI, built into the UAV Agri Dashboard"""
+
+
+def generate_ai_response_gemini(message: str, username: str, chat_history: list) -> str:
+    """Generate response using Google Gemini AI via REST API."""
+    try:
+        system_prompt = build_system_prompt(username)
+        
+        # Build conversation contents
+        contents = []
+        contents.append({"role": "user", "parts": [{"text": system_prompt}]})
+        contents.append({"role": "model", "parts": [{"text": "Understood! I'm AgriBot, ready to help " + username + " with anything they need."}]})
+        
+        for h in chat_history[-6:]:
+            role = "user" if h.get("role") == "user" else "model"
+            contents.append({"role": role, "parts": [{"text": h.get("content", "")}]})
+        
+        contents.append({"role": "user", "parts": [{"text": message}]})
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {"contents": contents}
+        
+        resp = http_requests.post(url, json=payload, timeout=30)
+        data = resp.json()
+        
+        if "candidates" in data and data["candidates"]:
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        
+        raise Exception(data.get("error", {}).get("message", "Unknown Gemini error"))
+    except Exception as e:
+        print(f"  ⚠️ Gemini API error: {e}")
+        return generate_ai_response_fallback(message, username)
+
+
+def generate_ai_response_fallback(message: str, username: str) -> str:
+    """Fallback when Gemini is unavailable."""
+    msg_lower = message.lower().strip()
+    total_scans = len(scan_history)
+    anomalies = sum(1 for s in scan_history if s.get("status") == "Needs Attention")
+    avg_health = round(sum(s.get("health_score", 0) for s in scan_history) / max(total_scans, 1), 1)
+    latest = scan_history[-1] if scan_history else None
+    
+    disease_counts = {}
+    for s in scan_history:
+        d = s.get("detected_disease", "Unknown")
+        disease_counts[d] = disease_counts.get(d, 0) + 1
+
+    if any(kw in msg_lower for kw in ["hello", "hi", "hey", "good"]):
+        hour = datetime.now().hour
+        g = "Good morning" if hour < 12 else ("Good afternoon" if hour < 17 else "Good evening")
+        status = f"\n\n📊 **Quick Status:** {total_scans} scans, {anomalies} anomalies, {avg_health}% avg health" if total_scans > 0 else ""
+        return f"{g}, **{username}**! 👋\n\nI'm AgriBot, your AI crop assistant. Ask me anything!{status}"
+
+    if any(kw in msg_lower for kw in ["health report", "summary", "overview", "status"]):
+        if total_scans == 0:
+            return f"📋 **No scan data yet, {username}.** Run scans from 🌿 Crop Analysis first!"
+        return f"📋 **Health Report**\n\n**Score:** {'🟢' if avg_health >= 80 else '🟡' if avg_health >= 50 else '🔴'} **{avg_health}%**\n**Scans:** {total_scans} | **Anomalies:** {anomalies}\n**Diseases:** {', '.join(f'{d}: {c}' for d, c in disease_counts.items())}"
+
+    if any(kw in msg_lower for kw in ["analyze", "scan", "latest", "detect", "disease", "defect"]):
+        if not latest:
+            return "🔍 No scan data yet. Go to 🌿 Crop Analysis to start scanning!"
+        d = latest.get("detected_disease", "Unknown")
+        return f"🔍 **Latest Scan**\n\n**Detection:** {'✅' if latest.get('status') == 'Healthy' else '⚠️'} **{d}**\n**Confidence:** {latest.get('health_score')}%\n**Recommendation:** {latest.get('recommendation')}"
+
+    if any(kw in msg_lower for kw in ["help", "what can you", "capabilities"]):
+        return f"🤖 **AgriBot Capabilities**\n\nI can answer **any question** — crops, diseases, science, coding, math, and more!\n\nTry: \"Analyze my scans\", \"Tell me about Late Blight\", \"Give me a health report\""
+
+    return f"I'm running in offline mode right now, **{username}**. I can help with scan analysis, disease info, and health reports. For full ChatGPT-like conversations, please configure the Gemini API key in main.py!\n\nTry asking: \"Give me a health report\" or \"Analyze my latest scan\""
+
+
+@app.get("/api/ai-status")
+async def ai_status():
+    """Check if Gemini AI is configured."""
+    return {
+        "gemini_configured": bool(GEMINI_API_KEY),
+        "mode": "gemini" if GEMINI_API_KEY else "offline"
+    }
+
+@app.post("/api/ai-config")
+async def ai_config(data: dict):
+    """Set the Gemini API key at runtime."""
+    global GEMINI_API_KEY
+    key = data.get("api_key", "").strip()
+    if key:
+        GEMINI_API_KEY = key
+        print(f"  ✅ Gemini API key configured successfully")
+        return {"message": "Gemini API key set! AgriBot is now powered by AI.", "configured": True}
+    raise HTTPException(status_code=400, detail="API key cannot be empty.")
+
+@app.post("/api/ai-chat")
+async def ai_chat(data: AIChatRequest):
+    """Process user message via Gemini AI and return response."""
+    if not data.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    
+    if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY_HERE":
+        response = generate_ai_response_gemini(data.message, data.username, data.chat_history)
+    else:
+        response = generate_ai_response_fallback(data.message, data.username)
+    
+    return {
+        "response": response,
+        "timestamp": time.time(),
+        "scan_data_available": len(scan_history) > 0,
+        "total_scans": len(scan_history)
+    }
+
+
+
 @app.get("/")
 def read_root():
     """Redirect root to the login page."""

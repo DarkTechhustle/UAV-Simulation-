@@ -649,6 +649,10 @@ const initDashboard = () => {
             if (targetId === "telemetry-view") viewTitle.innerText = "Live Drone Telemetry";
             if (targetId === "settings-view") viewTitle.innerText = "System Preferences";
             if (targetId === "contact-view") viewTitle.innerText = "Contact Us";
+            if (targetId === "ai-assistant-view") {
+                viewTitle.innerText = "AI Crop Assistant";
+                if (!aiGreetingSent) sendAiGreeting();
+            }
         });
     });
 
@@ -710,6 +714,480 @@ const initDashboard = () => {
             btnText.style.display = 'inline';
             btnSpinner.style.display = 'none';
             btn.disabled = false;
+        });
+    }
+
+    // -------------------------------------------------------------------
+    // 10. PHONE CALL ASSISTANT — Inform & Emergency Call System
+    // -------------------------------------------------------------------
+
+    // Utility: Validate phone number
+    function isValidPhone(phone) {
+        const cleaned = phone.replace(/[\s\-\(\)]/g, '');
+        return /^\+?\d{7,15}$/.test(cleaned);
+    }
+
+    // Utility: Clean phone number
+    function cleanPhone(phone) {
+        return phone.replace(/[\s\-\(\)]/g, '');
+    }
+
+    // Utility: Show feedback message
+    function showFeedback(el, message, type) {
+        el.textContent = message;
+        el.className = `inform-feedback ${type}`;
+        el.style.display = 'block';
+        if (type === 'success' || type === 'calling') {
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+    }
+
+    // Generate alarm sound using Web Audio API
+    function playAlarmSound() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const frequencies = [800, 1000, 800, 1000, 800, 1000];
+            let startTime = audioCtx.currentTime;
+
+            frequencies.forEach((freq, i) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.15, startTime + i * 0.3);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + i * 0.3 + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(startTime + i * 0.3);
+                osc.stop(startTime + i * 0.3 + 0.3);
+            });
+
+            return audioCtx;
+        } catch (e) {
+            console.warn('Audio not available:', e);
+            return null;
+        }
+    }
+
+    // Show ringing overlay animation
+    function showRingingOverlay(phoneNumber, onEnd) {
+        const overlay = document.createElement('div');
+        overlay.className = 'call-ringing-overlay';
+        overlay.innerHTML = `
+            <div class="call-ringing-card">
+                <div class="ringing-icon-container">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="#ff6e40">
+                        <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+                    </svg>
+                </div>
+                <h3 class="ringing-title">🚨 Alarm Call Initiated</h3>
+                <p class="ringing-number">${phoneNumber}</p>
+                <p class="ringing-status">Connecting emergency call...</p>
+                <div class="ringing-wave-dots">
+                    <span></span><span></span><span></span><span></span>
+                </div>
+                <button class="ringing-end-btn" id="ringing-end-btn">✕ End Call</button>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Play alarm sound
+        const audioCtx = playAlarmSound();
+
+        // End call button
+        const endBtn = overlay.querySelector('#ringing-end-btn');
+        endBtn.addEventListener('click', () => {
+            if (audioCtx) audioCtx.close();
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => overlay.remove(), 300);
+            if (onEnd) onEnd();
+        });
+
+        // Auto-redirect to tel: after animation
+        setTimeout(() => {
+            window.location.href = `tel:${cleanPhone(phoneNumber)}`;
+        }, 1500);
+
+        // Auto-close after 10 seconds
+        setTimeout(() => {
+            if (document.body.contains(overlay)) {
+                if (audioCtx) audioCtx.close();
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => overlay.remove(), 300);
+                if (onEnd) onEnd();
+            }
+        }, 10000);
+    }
+
+    // Initiate alarm call
+    async function initiateAlarmCall(phoneNumber, feedbackEl, btn, btnTextEl) {
+        if (!isValidPhone(phoneNumber)) {
+            showFeedback(feedbackEl, '⚠️ Please enter a valid phone number (e.g., +91 6384027046)', 'error');
+            return;
+        }
+
+        const cleanedNumber = cleanPhone(phoneNumber);
+        
+        // Update button state
+        btn.classList.add('calling');
+        const origText = btnTextEl.textContent;
+        btnTextEl.textContent = 'CALLING...';
+        btn.disabled = true;
+
+        showFeedback(feedbackEl, '📞 Initiating alarm call to ' + phoneNumber + '...', 'calling');
+
+        // Log the call to backend
+        try {
+            await fetch('/api/alarm-call', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    phone_number: cleanedNumber, 
+                    caller: localStorage.getItem('uav_user') ? JSON.parse(localStorage.getItem('uav_user')).fullname : 'Unknown',
+                    type: 'emergency_alarm'
+                })
+            });
+        } catch (e) {
+            console.warn('Backend log failed (proceeding with call):', e);
+        }
+
+        // Show ringing overlay with animation
+        showRingingOverlay(phoneNumber, () => {
+            // Reset button after call ends
+            btn.classList.remove('calling');
+            btnTextEl.textContent = origText;
+            btn.disabled = false;
+            showFeedback(feedbackEl, '✅ Alarm call initiated to ' + phoneNumber, 'success');
+        });
+    }
+
+    // --- Contact Form: INFORM Button ---
+    const informCallBtn = document.getElementById('inform-call-btn');
+    const informPhoneInput = document.getElementById('inform-phone');
+    const informFeedback = document.getElementById('inform-feedback');
+    const informBtnText = document.getElementById('inform-btn-text');
+
+    if (informCallBtn) {
+        informCallBtn.addEventListener('click', () => {
+            const phone = informPhoneInput.value.trim();
+            initiateAlarmCall(phone, informFeedback, informCallBtn, informBtnText);
+        });
+
+        // Enter key support
+        informPhoneInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                informCallBtn.click();
+            }
+        });
+    }
+
+    // --- Floating Call Assistant Widget ---
+    const callFab = document.getElementById('call-assistant-fab');
+    const callPanel = document.getElementById('call-assistant-panel');
+    const callPanelClose = document.getElementById('call-panel-close');
+    const assistantCallBtn = document.getElementById('assistant-call-btn');
+    const assistantPhoneInput = document.getElementById('assistant-phone');
+    const assistantFeedback = document.getElementById('assistant-feedback');
+    const assistantBtnText = document.getElementById('assistant-btn-text');
+
+    if (callFab) {
+        callFab.addEventListener('click', () => {
+            const isOpen = callPanel.classList.contains('open');
+            if (isOpen) {
+                callPanel.classList.remove('open');
+                callFab.classList.remove('active');
+            } else {
+                callPanel.classList.add('open');
+                callFab.classList.add('active');
+                assistantPhoneInput.focus();
+            }
+        });
+    }
+
+    if (callPanelClose) {
+        callPanelClose.addEventListener('click', () => {
+            callPanel.classList.remove('open');
+            callFab.classList.remove('active');
+        });
+    }
+
+    if (assistantCallBtn) {
+        assistantCallBtn.addEventListener('click', () => {
+            const phone = assistantPhoneInput.value.trim();
+            initiateAlarmCall(phone, assistantFeedback, assistantCallBtn, assistantBtnText);
+        });
+
+        assistantPhoneInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                assistantCallBtn.click();
+            }
+        });
+    }
+
+    // --- Quick Dial Buttons ---
+    document.querySelectorAll('.quick-dial-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const number = btn.getAttribute('data-number');
+            assistantPhoneInput.value = number;
+            initiateAlarmCall(number, assistantFeedback, assistantCallBtn, assistantBtnText);
+        });
+    });
+
+    // ===================================================================
+    // 11. AI CHAT ASSISTANT — Crop Defect Analysis & Decision Making
+    // ===================================================================
+
+    const aiChatMessages = document.getElementById('ai-chat-messages');
+    const aiChatInput = document.getElementById('ai-chat-input');
+    const aiSendBtn = document.getElementById('ai-send-btn');
+    const aiSuggestions = document.getElementById('ai-suggestions');
+    const aiStatus = document.getElementById('ai-status');
+    const aiClearChat = document.getElementById('ai-clear-chat');
+
+    let aiGreetingSent = false;
+    let aiChatHistory = [];
+
+    // Get current user info
+    function getAiUserName() {
+        try {
+            const user = JSON.parse(localStorage.getItem('uav_user'));
+            return user ? (user.fullname || user.username) : 'Operator';
+        } catch (e) { return 'Operator'; }
+    }
+
+    // Get greeting based on time of day
+    function getTimeGreeting() {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good morning';
+        if (hour < 17) return 'Good afternoon';
+        if (hour < 21) return 'Good evening';
+        return 'Hey there';
+    }
+
+    // Format timestamp
+    function formatChatTime(date) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Add message to the chat
+    function addChatMessage(content, sender = 'ai', animate = true) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `ai-msg ai-msg-${sender}${animate ? ' ai-msg-animate' : ''}`;
+        
+        const time = formatChatTime(new Date());
+
+        if (sender === 'ai') {
+            msgDiv.innerHTML = `
+                <div class="ai-msg-avatar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                    </svg>
+                </div>
+                <div class="ai-msg-content">
+                    <div class="ai-msg-bubble ai-bubble">${formatAiContent(content)}</div>
+                    <span class="ai-msg-time">${time}</span>
+                </div>
+            `;
+        } else {
+            msgDiv.innerHTML = `
+                <div class="ai-msg-content">
+                    <div class="ai-msg-bubble user-bubble">${escapeHtml(content)}</div>
+                    <span class="ai-msg-time">${time}</span>
+                </div>
+            `;
+        }
+
+        aiChatMessages.appendChild(msgDiv);
+        aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+        
+        aiChatHistory.push({ role: sender, content, timestamp: Date.now() });
+    }
+
+    // Escape HTML
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // Format AI content with simple markdown-like formatting
+    function formatAiContent(text) {
+        return text
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/__(.*?)__/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>')
+            .replace(/• /g, '<span class="ai-bullet">•</span> ')
+            .replace(/🔴|🟡|🟢|⚠️|✅|❌|📊|🌿|💡|🔍|📋|🚨|💊|🧪|🛡️|📈|⏱️|🎯/g, '<span class="ai-emoji">$&</span>');
+    }
+
+    // Show typing indicator
+    function showTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'ai-msg ai-msg-ai ai-typing-indicator';
+        typingDiv.id = 'ai-typing';
+        typingDiv.innerHTML = `
+            <div class="ai-msg-avatar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                </svg>
+            </div>
+            <div class="ai-msg-content">
+                <div class="ai-msg-bubble ai-bubble typing-bubble">
+                    <div class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        `;
+        aiChatMessages.appendChild(typingDiv);
+        aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+        aiStatus.innerHTML = '<span class="ai-status-dot thinking"></span> Analyzing...';
+    }
+
+    function removeTypingIndicator() {
+        const typing = document.getElementById('ai-typing');
+        if (typing) typing.remove();
+        aiStatus.innerHTML = '<span class="ai-status-dot"></span> Online — Ready to help';
+    }
+
+    // Send greeting when user first opens AI Assistant
+    async function sendAiGreeting() {
+        aiGreetingSent = true;
+        const name = getAiUserName();
+        const timeGreet = getTimeGreeting();
+        
+        showTypingIndicator();
+        
+        // Check if Gemini is configured
+        let geminiMode = 'offline';
+        try {
+            const res = await fetch('/api/ai-status');
+            const status = await res.json();
+            geminiMode = status.mode;
+        } catch(e) {}
+
+        setTimeout(() => {
+            removeTypingIndicator();
+
+            let greeting = `${timeGreet}, **${name}**! 👋\n\nI'm **AgriBot**, your AI crop analysis assistant.`;
+
+            if (geminiMode === 'gemini') {
+                greeting += `\n\n🟢 **Gemini AI is active** — I can answer **any question** you have, just like ChatGPT! Ask me about:\n\n• 🔍 Crop defects, diseases & treatments\n• 📊 Your scan data & health reports\n• 🌾 Farming techniques & best practices\n• 💻 Coding, science, math — anything!\n\nWhat are you up to today? 🌱`;
+            } else {
+                greeting += ` I'm currently in **offline mode** with basic capabilities.\n\nTo unlock **full ChatGPT-like AI**, set up your free Gemini API key:\n\n• 1️⃣ Go to **https://aistudio.google.com/apikey**\n• 2️⃣ Create a free API key\n• 3️⃣ Type \`/setup YOUR_API_KEY\` here\n\nOr ask me basic questions about your crops! 🌱`;
+            }
+
+            addChatMessage(greeting, 'ai');
+        }, 1200);
+    }
+
+    // Send message to AI
+    async function sendAiMessage(message) {
+        if (!message.trim()) return;
+
+        // Handle /setup command for API key
+        if (message.trim().startsWith('/setup ')) {
+            const apiKey = message.trim().substring(7).trim();
+            addChatMessage(message, 'user');
+            aiChatInput.value = '';
+            showTypingIndicator();
+            
+            try {
+                const res = await fetch('/api/ai-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey })
+                });
+                removeTypingIndicator();
+                if (res.ok) {
+                    addChatMessage('✅ **Gemini AI activated!** 🎉\n\nI\'m now powered by Google Gemini AI. Ask me **anything** — crop analysis, science, coding, math, history, and more!\n\nTry asking me something! 🚀', 'ai');
+                    aiStatus.innerHTML = '<span class="ai-status-dot"></span> Online — Gemini AI Active';
+                } else {
+                    addChatMessage('❌ Invalid API key. Please check and try again.', 'ai');
+                }
+            } catch(e) {
+                removeTypingIndicator();
+                addChatMessage('❌ Failed to configure API key. Check your connection.', 'ai');
+            }
+            return;
+        }
+
+        // Add user message
+        addChatMessage(message, 'user');
+        aiChatInput.value = '';
+        
+        // Hide suggestions after first message
+        aiSuggestions.classList.add('hidden');
+        
+        // Show typing
+        showTypingIndicator();
+
+        try {
+            const res = await fetch('/api/ai-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: message,
+                    username: getAiUserName(),
+                    chat_history: aiChatHistory.slice(-10).map(h => ({role: h.role, content: h.content}))
+                })
+            });
+
+            const data = await res.json();
+            
+            removeTypingIndicator();
+
+            if (res.ok) {
+                addChatMessage(data.response, 'ai');
+            } else {
+                addChatMessage('⚠️ Sorry, I encountered an error. Please try again.', 'ai');
+            }
+        } catch (err) {
+            removeTypingIndicator();
+            addChatMessage('❌ Network error. Please check your connection and try again.', 'ai');
+        }
+    }
+
+    // Event handlers
+    if (aiSendBtn) {
+        aiSendBtn.addEventListener('click', () => {
+            sendAiMessage(aiChatInput.value);
+        });
+    }
+
+    if (aiChatInput) {
+        aiChatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendAiMessage(aiChatInput.value);
+            }
+        });
+    }
+
+    // Suggestion chips
+    if (aiSuggestions) {
+        aiSuggestions.querySelectorAll('.ai-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const prompt = chip.getAttribute('data-prompt');
+                sendAiMessage(prompt);
+            });
+        });
+    }
+
+    // Clear chat
+    if (aiClearChat) {
+        aiClearChat.addEventListener('click', () => {
+            aiChatMessages.innerHTML = '';
+            aiChatHistory = [];
+            aiGreetingSent = false;
+            aiSuggestions.classList.remove('hidden');
+            sendAiGreeting();
         });
     }
 

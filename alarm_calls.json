@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "description": "UAV Dashboard — Alarm Call Log",
+    "total_calls": 5
+  },
+  "calls": [
+    {
+      "id": "6837a4d1",
+      "phone_number": "+916384027046",
+      "caller": "Test User",
+      "type": "emergency_alarm",
+      "initiated_at": "2026-05-02T21:49:54.048292",
+      "status": "initiated"
+    },
+    {
+      "id": "340625c2",
+      "phone_number": "+916384027046",
+      "caller": "aswin",
+      "type": "emergency_alarm",
+      "initiated_at": "2026-05-02T21:50:57.622319",
+      "status": "initiated"
+    },
+    {
+      "id": "8fcbf022",
+      "phone_number": "+919600321762",
+      "caller": "aswin",
+      "type": "emergency_alarm",
+      "initiated_at": "2026-05-02T21:51:24.434694",
+      "status": "initiated"
+    },
+    {
+      "id": "966bf304",
+      "phone_number": "+916384027046",
+      "caller": "aswin",
+      "type": "emergency_alarm",
+      "initiated_at": "2026-05-02T21:52:05.931125",
+      "status": "initiated"
+    },
+    {
+      "id": "bc94ec90",
+      "phone_number": "+916384027046",
+      "caller": "aswin",
+      "type": "emergency_alarm",
+      "initiated_at": "2026-05-02T21:52:10.819838",
+      "status": "initiated"
+    }
+  ]
+}
