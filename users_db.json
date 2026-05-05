@@ -2,8 +2,8 @@
   "_meta": {
     "description": "UAV Smart Agriculture — User Database",
     "created_at": "2026-05-01T22:11:03.457587",
-    "last_modified": "2026-05-02T22:44:53.213359",
-    "total_users": 5
+    "last_modified": "2026-05-05T10:22:45.409744",
+    "total_users": 6
   },
   "users": {
     "admin": {
@@ -35,8 +35,8 @@
       "password_hash": "069553d45a154b5c304e6048a342c7c8dc9e238558535ebc419ad6df795f6f89",
       "role": "agronomist",
       "created_at": "2026-05-01T22:41:36.641687",
-      "last_login": "2026-05-02T22:44:53.213351",
-      "login_count": 8,
+      "last_login": "2026-05-04T23:56:25.420165",
+      "login_count": 11,
       "is_active": true
     },
     "shobs": {
@@ -58,6 +58,17 @@
       "role": "agronomist",
       "created_at": "2026-05-01T23:09:31.981622",
       "last_login": "2026-05-01T23:10:11.678088",
+      "login_count": 1,
+      "is_active": true
+    },
+    "hari": {
+      "username": "hari",
+      "fullname": "HARI HARAN",
+      "email": "hariharan.vdy@gmail.com",
+      "password_hash": "bdffde56bb30ba126342b4bf61499911a7de2aec249cefd8fb6d84c4e6a8a7ae",
+      "role": "admin",
+      "created_at": "2026-05-05T10:22:12.943640",
+      "last_login": "2026-05-05T10:22:45.409722",
       "login_count": 1,
       "is_active": true
     }

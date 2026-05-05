@@ -397,34 +397,50 @@ const initDashboard = () => {
 
         const name = newDetection.querySelector('.rt-disease-name');
         name.className = `rt-disease-name ${statusClass}`;
-        name.textContent = data.detected_disease;
+        
+        // Display both crop type and disease using enhanced CNN analysis
+        const cropType = data.crop_prediction?.predicted_crop || 'Unknown';
+        const cropConfidence = data.crop_prediction?.confidence || 0;
+        name.textContent = `${cropType} - ${data.disease_detection?.detected_disease || data.detected_disease}`;
 
         const label = newDetection.querySelector('.rt-status-label');
-        label.textContent = `Status: ${data.status}`;
+        const diseaseConfidence = data.disease_detection?.confidence || data.health_score;
+        label.textContent = `Status: ${data.disease_detection?.status || data.status} | Disease: ${diseaseConfidence}% | Crop: ${cropConfidence}%`;
 
-        // Confidence bar
-        rtConfidenceValue.textContent = `${data.health_score}%`;
+        // Confidence bar using disease detection confidence
+        const healthScore = data.disease_detection?.health_score || data.health_score;
+        rtConfidenceValue.textContent = `${healthScore}%`;
         rtConfidenceValue.style.color = isHealthy ? 'var(--accent)' : 'var(--warning)';
-        rtConfidenceFill.style.width = `${data.health_score}%`;
+        rtConfidenceFill.style.width = `${healthScore}%`;
         rtConfidenceFill.className = `rt-confidence-fill ${isHealthy ? '' : 'warning'}`;
 
         // Recommendation
-        rtRecommendationText.textContent = data.recommendation;
+        rtRecommendationText.textContent = data.disease_detection?.recommendation || data.recommendation;
 
-        // Status label
+        // Display NDVI and vegetation health
+        if (data.color_analysis) {
+            const ndviScore = data.color_analysis.ndvi_score;
+            const vegHealth = data.color_analysis.vegetation_health;
+            const additionalInfo = document.createElement('div');
+            additionalInfo.style.cssText = 'font-size: 12px; color: var(--text-secondary); margin-top: 8px;';
+            additionalInfo.textContent = `🌱 NDVI: ${ndviScore}% | Vegetation: ${vegHealth}`;
+            rtRecommendationText.parentNode.insertBefore(additionalInfo, rtRecommendationText.nextSibling);
+        }
+
+        // Status label with enhanced info
         detectionStatus.textContent = isHealthy ? '🟢 Healthy' : '🔴 Alert';
     }
 
     function updateMetrics() {
         const totalScans = scanResults.length;
-        const anomalies = scanResults.filter(r => r.status === 'Needs Attention').length;
+        const anomalies = scanResults.filter(r => r.disease_detection?.status === 'Needs Attention' || r.status === 'Needs Attention').length;
         const avgConf = totalScans > 0 
-            ? (scanResults.reduce((sum, r) => sum + r.health_score, 0) / totalScans).toFixed(1)
+            ? (scanResults.reduce((sum, r) => sum + (r.disease_detection?.health_score || r.health_score), 0) / totalScans).toFixed(1)
             : '—';
 
         // Get latest health score for ring
-        const latestHealth = totalScans > 0 ? scanResults[totalScans - 1].health_score : 0;
-        const isLatestHealthy = totalScans > 0 ? scanResults[totalScans - 1].status === 'Healthy' : true;
+        const latestHealth = totalScans > 0 ? (scanResults[totalScans - 1].disease_detection?.health_score || scanResults[totalScans - 1].health_score) : 0;
+        const isLatestHealthy = totalScans > 0 ? (scanResults[totalScans - 1].disease_detection?.status || scanResults[totalScans - 1].status) === 'Healthy' : true;
 
         // Animate counters
         metricScans.textContent = totalScans;
@@ -442,15 +458,18 @@ const initDashboard = () => {
     function addHistoryEntry(data) {
         if (historyEmpty) historyEmpty.style.display = 'none';
 
-        const isHealthy = data.status === 'Healthy';
+        const isHealthy = (data.disease_detection?.status || data.status) === 'Healthy';
         const time = new Date(data.timestamp * 1000).toLocaleTimeString();
+        const disease = data.disease_detection?.detected_disease || data.detected_disease;
+        const confidence = data.disease_detection?.health_score || data.health_score;
+        const crop = data.crop_prediction?.predicted_crop || '';
 
         const entry = document.createElement('div');
         entry.className = `history-item ${isHealthy ? '' : 'warning'}`;
         entry.innerHTML = `
             <span class="history-dot"></span>
-            <span class="history-disease">${data.detected_disease}</span>
-            <span class="history-confidence">${data.health_score}%</span>
+            <span class="history-disease">${crop ? crop + ' - ' : ''}${disease}</span>
+            <span class="history-confidence">${confidence}%</span>
             <span class="history-time">${time}</span>
         `;
 
